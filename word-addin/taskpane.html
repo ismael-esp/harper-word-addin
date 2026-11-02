@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Harper</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg:#f3f3f3; --panel:#fff; --text:#242424; --muted:#616161; --line:#e0e0e0; --hover:#f5f5f5;
+    --accent:#0f6cbd; --btn:#0f6cbd; --btn-hover:#115ea3; --bad:#c50f1f;
+    --Red:#c50f1f; --Red-soft:#fdf0f1; --Blue:#0f6cbd; --Blue-soft:#ebf3fc; --Lavender:#7d55b4; --Lavender-soft:#f4effa;
+    --ok:#107c10; --ok-soft:#e7f4e7;
+    --shadow:0 0 2px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.14); --shadow-hi:0 0 2px rgba(0,0,0,.12), 0 4px 8px rgba(0,0,0,.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#1f1f1f; --panel:#292929; --text:#f2f2f2; --muted:#adadad; --line:#3d3d3d; --hover:#333;
+      --accent:#479ef5; --btn:#115ea3; --btn-hover:#0f6cbd; --bad:#f1707b;
+      --Red:#f1707b; --Red-soft:#3e2326; --Blue:#62abf5; --Blue-soft:#1c2c3d; --Lavender:#b896e6; --Lavender-soft:#30283b;
+      --ok:#54b054; --ok-soft:#1f3320;
+      --shadow:0 0 2px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4); --shadow-hi:0 0 2px rgba(0,0,0,.5), 0 4px 8px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  header { position:sticky; top:0; z-index:1; display:flex; gap:8px 6px; align-items:center; flex-wrap:wrap; padding:10px 12px; background:var(--panel); box-shadow:0 1px 0 var(--line), 0 2px 6px rgba(0,0,0,.04); }
+  #status { flex:1; min-width:0; font:600 15px/1.3 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+  select, button, input { font:inherit; color:inherit; background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:4px 8px; cursor:pointer; }
+  select:hover, button:hover { background:var(--hover); }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  #recheck, #settingsBtn { display:grid; place-items:center; width:30px; height:30px; padding:0; }
+  #recheck svg, #settingsBtn svg { transition:transform .3s ease; }
+  #recheck:hover svg, #settingsBtn:hover svg { transform:rotate(90deg); }
+  #filter { flex-basis:100%; }
+  #summary { flex-basis:100%; display:flex; flex-wrap:wrap; gap:6px; }
+  #summary:empty { display:none; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:1px 10px 1px 8px; border-radius:999px; background:var(--soft); color:var(--c); font-size:12px; font-weight:600; }
+  .chip::before, .kind::before { content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .Red { --c:var(--Red); --soft:var(--Red-soft); }
+  .Blue { --c:var(--Blue); --soft:var(--Blue-soft); }
+  .Lavender { --c:var(--Lavender); --soft:var(--Lavender-soft); }
+
+  #issues { padding:10px; }
+  /* content-visibility skips layout/paint of off-screen cards: keeps 1000-issue lists smooth */
+  .issue { position:relative; background:var(--panel); border-radius:8px; padding:10px 12px 10px 15px; margin-bottom:8px; box-shadow:var(--shadow); cursor:pointer; content-visibility:auto; contain-intrinsic-size:auto 120px; }
+  .issue:hover { box-shadow:var(--shadow-hi); }
+  .issue::before { content:''; position:absolute; left:0; top:10px; bottom:10px; width:3px; border-radius:0 3px 3px 0; background:var(--c); }
+  .issue::after { content:''; position:absolute; inset:0; border-radius:inherit; box-shadow:inset 0 0 0 2px var(--c); opacity:0; pointer-events:none; }
+  .issue.flash::after { animation:flash 1.4s ease-out; }
+  @keyframes flash { 0%, 40% { opacity:1; } to { opacity:0; } }
+  .issue.flash { animation:nudge .35s ease-out; }
+  @keyframes nudge { 50% { transform:scale(1.015); } }
+  .issue.enter { animation:enter .25s cubic-bezier(.1,.9,.2,1) both; }
+  @keyframes enter { from { opacity:0; transform:translateY(8px); } }
+  .issue.leaving { opacity:0; transform:translateX(24px); transition:opacity .2s, transform .2s ease-in; pointer-events:none; }
+  .kind { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--c); }
+  .bad { display:inline-block; margin:4px 0 2px; font-size:14px; font-weight:600; text-decoration:line-through; text-decoration-color:var(--c); text-decoration-thickness:2px; overflow-wrap:anywhere; }
+  .msg { color:var(--muted); overflow-wrap:anywhere; }
+  .fixes { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .fixes button { font-weight:600; padding:3px 10px; overflow-wrap:anywhere; text-align:left; }
+  .fixes button:not(.ignore) { background:var(--soft); color:var(--c); border-color:transparent; }
+  .fixes button:not(.ignore):hover { border-color:var(--c); }
+  .fixes button:first-child:not(.ignore) { background:var(--btn); color:#fff; }
+  .fixes button:first-child:not(.ignore):hover { background:var(--btn-hover); }
+  .fixes .ignore { color:var(--muted); background:none; border-color:transparent; font-weight:400; }
+  .fixes .ignore:hover { color:var(--text); background:var(--hover); }
+  .actions { display:flex; gap:2px; margin-left:auto; }
+
+  .empty, .loading { display:flex; flex-direction:column; align-items:center; gap:4px; margin-top:48px; padding:0 16px; text-align:center; color:var(--muted); }
+  .empty b, .loading b { color:var(--text); font-size:15px; font-weight:600; }
+  .empty svg { margin-bottom:8px; animation:enter .4s cubic-bezier(.1,.9,.2,1) both; }
+  .spinner { width:28px; height:28px; margin-bottom:12px; border-radius:50%; border:3px solid var(--line); border-top-color:var(--accent); animation:spin .9s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  #settings { padding:4px 12px 12px; }
+  #settings h3 { font-size:13px; margin:14px 0 6px; display:flex; gap:6px; align-items:center; }
+  #words { display:flex; flex-wrap:wrap; gap:4px; color:var(--muted); }
+  #rules details { background:var(--panel); border-radius:6px; margin-bottom:4px; box-shadow:var(--shadow); }
+  #rules summary { cursor:pointer; padding:6px 10px; font-weight:600; }
+  #rules label { display:block; padding:2px 10px 2px 22px; cursor:pointer; }
+  #ruleSearch { flex:1; min-width:0; cursor:text; }
+
+  /* fades are fine; drop movement */
+  @media (prefers-reduced-motion: reduce) {
+    .issue.enter, .issue.flash, .empty svg { animation:none; }
+    .issue.leaving { transform:none; }
+    #recheck svg, #settingsBtn svg { transition:none; }
+    .spinner { animation-duration:2s; }
+  }
+</style>
+<style id="filterCss"></style>
+</head>
+<body>
+<header>
+  <span id="status">Loading Harper…</span>
+  <select id="dialect" title="English dialect">
+    <option value="American">American</option>
+    <option value="British">British</option>
+    <option value="Australian">Australian</option>
+    <option value="Canadian">Canadian</option>
+    <option value="Indian">Indian</option>
+  </select>
+  <button id="recheck" title="Check the document again" aria-label="Check again"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.5 1.5v3h-3"/></svg></button>
+  <button id="settingsBtn" title="Rules and personal dictionary" aria-label="Settings" aria-expanded="false" disabled><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke-linecap="round"/></svg></button>
+  <select id="filter" title="Show only one kind of issue"><option value="">All</option></select>
+  <div id="summary"></div>
+</header>
+<section id="settings" hidden>
+  <h3>Personal dictionary</h3>
+  <div id="words"></div>
+  <h3>Rules <input id="ruleSearch" placeholder="Search rules" aria-label="Search rules"> <button id="resetRules">Reset</button></h3>
+  <div id="rules"></div>
+  <h3><button id="clearIgnored">Restore ignored issues</button></h3>
+</section>
+<div id="issues"><div class="loading" role="status"><div class="spinner"></div><b>Loading Harper…</b>The first check takes a few seconds.</div></div>
+<script src="harper.bundle.js"></script>
+<script>
+const { LocalLinter, Dialect, binaryInlined } = Harper;
+const $ = id => document.getElementById(id);
+const statusEl = $('status'), issuesEl = $('issues');
+let linter, cache = new Map(), lastTexts = [], busy = false, rerun = null, pollMs = 1500, soon = null;
+let ignored = new Set();
+try { ignored = new Set(JSON.parse(localStorage.getItem('ignored') || '[]')); } catch {}
+let rules = {}; // only the rules the user changed: { RuleName: true|false }
+try { rules = JSON.parse(localStorage.getItem('rules') || '{}'); } catch {}
+
+const keyOf = f => `${f.bad}|${f.lint.kind}`;
+
+// Copies what we need out of Harper's WASM objects and frees them right away, so the WASM heap doesn't wait for GC.
+function plain(lint) {
+  const span = lint.span(), sugs = lint.suggestions();
+  const l = { start: span.start, end: span.end, kind: lint.lint_kind(), pretty: lint.lint_kind_pretty(), message: lint.message(),
+    fixes: sugs.map(s => ({ rep: s.get_replacement_text(), kind: s.kind() })) };
+  span.free(); sugs.forEach(s => s.free()); lint.free();
+  return l;
+}
+
+let linterGen = 0, retired = [];
+
+async function makeLinter() {
+  const gen = ++linterGen;
+  statusEl.textContent = 'Loading Harper…';
+  const next = new LocalLinter({ binary: binaryInlined, dialect: Dialect[$('dialect').value] });
+  await next.setup();
+  try {
+    const words = (await (await fetch('dictionary', { cache: 'no-store' })).text()).split(/\r?\n/).filter(Boolean);
+    if (words.length) await next.importWords(words);
+  } catch {} // no dictionary yet, or server too old: just check without it
+  await applyRules(next);
+  if (gen !== linterGen) { next.dispose().catch(() => {}); return; } // a newer dialect switch finished or is coming
+  const old = linter;
+  linter = next;
+  $('settingsBtn').disabled = false;
+  // a running check may still be linting with the old one; disposing it then makes lint() throw
+  if (old) busy ? retired.push(old) : old.dispose().catch(() => {});
+  try { localStorage.setItem('dialect', $('dialect').value); } catch {}
+  cache = new Map();
+  await check(true);
+}
+
+// Polls the document; with Word's paragraph events (WordApi 1.6) the poll is only a slow safety net.
+async function poll() {
+  try { await check(false); } catch (e) { statusEl.textContent = 'Error: ' + e.message; }
+  setTimeout(poll, pollMs);
+}
+
+async function watch() {
+  if (!Office.context.requirements.isSetSupported('WordApi', '1.6')) return;
+  // not debounced: checks at most 1 s after the first change, even while the user keeps typing
+  const changed = async () => { soon ||= setTimeout(() => { soon = null; check(false).catch(() => {}); }, 1000); };
+  await Word.run(async ctx => {
+    const d = ctx.document;
+    d.onParagraphChanged.add(changed); d.onParagraphAdded.add(changed); d.onParagraphDeleted.add(changed);
+    await ctx.sync();
+  });
+  pollMs = 10000;
+}
+
+async function check(force) {
+  if (!linter) return;
+  // a forced check (after a fix, Ignore, dictionary, dialect) must not be lost while another check runs
+  if (busy) { rerun = rerun === true || force; return; }
+  busy = true;
+  try {
+    await Word.run(async ctx => {
+      const paras = ctx.document.body.paragraphs;
+      paras.load('items/text');
+      await ctx.sync();
+      const texts = paras.items.map(p => p.text);
+      if (!force && texts.length === lastTexts.length && texts.every((t, i) => t === lastTexts[i])) return;
+      lastTexts = []; // set again only once this check succeeds, so a failed one is retried by the next poll
+      const lt = linter, old = cache, next = new Map(), found = [];
+      for (let p = 0; p < texts.length; p++) {
+        const text = texts[p];
+        if (!text.trim()) continue;
+        // only paragraphs that changed get linted again
+        const lints = next.get(text) || old.get(text) || (await lt.lint(text)).map(plain);
+        next.set(text, lints);
+        for (const lint of lints) {
+          const f = { p, text, start: lint.start, end: lint.end, bad: text.slice(lint.start, lint.end), lint };
+          if (!ignored.has(keyOf(f))) found.push(f);
+        }
+      }
+      if (cache === old) cache = next; // else the dictionary, rules or dialect changed meanwhile and these results are stale
+      const cards = render(found);
+      updateFilter(found);
+      if (canMark()) await mark(ctx, paras.items, found, cards);
+      lastTexts = texts;
+    });
+  } finally {
+    busy = false;
+    retired.splice(0).forEach(l => l.dispose().catch(() => {}));
+    if (rerun !== null) { const f = rerun; rerun = null; check(f).catch(() => {}); }
+  }
+}
+
+const colorOf = f => ({ Spelling: 'Red', Typo: 'Red' })[f.lint.kind] ||
+  (['Style', 'Readability', 'WordChoice', 'Redundancy', 'Enhancement', 'Repetition'].includes(f.lint.kind) ? 'Lavender' : 'Blue');
+const canMark = () => window.Office?.context?.requirements?.isSetSupported('WordApi', '1.7');
+let marked = [], cardById = new Map(), redrawAll = false;
+
+// Draws Word's own squiggly underlines (critiques); they don't edit the document. Only redraws paragraphs whose issues changed.
+async function mark(ctx, items, found, cards) {
+  if (redrawAll) { marked = []; redrawAll = false; }
+  const byPara = new Map();
+  found.forEach((f, i) => { if (f.end > f.start) (byPara.get(f.p) || byPara.set(f.p, []).get(f.p)).push(i); });
+  const sigs = items.map((para, p) => para.text + '\u0001' + (byPara.get(p) || []).map(i => `${found[i].start},${found[i].end},${colorOf(found[i])}`).join(';'));
+  // A paragraph that only moved (Enter or a deletion above it) keeps its underlines; only matches unique on both sides count.
+  const tally = a => a.reduce((n, s) => n.set(s, (n.get(s) || 0) + 1), new Map());
+  const oldN = tally(marked.map(m => m.sig)), newN = tally(sigs);
+  const moved = new Map(marked.filter(m => oldN.get(m.sig) === 1 && newN.get(m.sig) === 1).map(m => [m.sig, m]));
+  const next = [], todo = [];
+  sigs.forEach((sig, p) => {
+    const keep = marked[p]?.sig === sig ? marked[p] : sig === '\u0001' ? { sig, ids: [] } : null; // empty paragraphs hold no underlines
+    if (keep) next[p] = keep;
+    else todo.push({ p, idx: byPara.get(p) || [], sig, moved: moved.get(sig), old: items[p].getAnnotations() });
+  });
+  if (todo.length) { // a forced check with nothing new costs no round trips here
+    todo.forEach(t => t.old.load('items/id'));
+    await ctx.sync();
+    // a moved paragraph keeps its underlines only if Word really kept them (cut and paste drops them)
+    const redo = todo.filter(t => {
+      const ids = t.old.items.map(a => a.id);
+      if (!t.moved || ids.length !== t.moved.ids.length || !t.moved.ids.every(id => ids.includes(id))) return true;
+      next[t.p] = t.moved;
+      return false;
+    });
+    if (redo.length) {
+      for (const t of redo) {
+        t.old.items.forEach(a => a.delete());
+        t.ids = t.idx.length ? items[t.p].insertAnnotations({
+          critiques: t.idx.map(i => ({ start: found[i].start, length: found[i].end - found[i].start, colorScheme: colorOf(found[i]) })),
+        }) : null;
+      }
+      await ctx.sync();
+      for (const t of redo) next[t.p] = { sig: t.sig, ids: t.ids ? t.ids.value : [] };
+    }
+  }
+  marked = next;
+  cardById = new Map();
+  for (const [p, idx] of byPara) (marked[p]?.ids || []).forEach((id, j) => cardById.set(id, cards[idx[j]]));
+}
+
+function onMarkClicked(e) {
+  const card = cardById.get(e.id);
+  if (!card) return;
+  // the card may be hidden by the filter or the settings view
+  if ($('filter').value && card.dataset.kind !== $('filter').value) { $('filter').value = ''; applyFilter(); }
+  if (!$('settings').hidden) showSettings();
+  card.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
+}
+
+const LABELS = { Red: 'Spelling', Blue: 'Grammar', Lavender: 'Style' };
+const EMPTY = `<div class="empty"><svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
+  <circle cx="44" cy="44" r="34" fill="var(--ok-soft)"/><circle cx="44" cy="44" r="22" fill="var(--ok)"/>
+  <path d="M34 44.5l7 7 13-14" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M74 14v8M70 18h8M14 66v6M11 69h6" stroke="var(--ok)" stroke-width="2" stroke-linecap="round"/></svg>
+  <b>Looks good</b>No issues found in this document.</div>`;
+let cardsOf = new Map(); // lint → its cards, reused while the paragraph text is unchanged (lints are cached per text)
+let seen = new Set();
+
+// Fades a card out at once; render() removes it, or it comes back if nothing changed (e.g. a failed fix).
+function leave(card) {
+  card.classList.add('leaving');
+  setTimeout(() => card.classList.remove('leaving'), 2000);
+}
+
+function render(found) {
+  const counts = { Red: 0, Blue: 0, Lavender: 0 };
+  statusEl.textContent = found.length ? `${found.length} issue${found.length > 1 ? 's' : ''}` : 'No issues';
+  for (const f of found) counts[colorOf(f)]++;
+  $('summary').innerHTML = Object.keys(counts).filter(c => counts[c]).map(c => `<span class="chip ${c}">${counts[c]} ${LABELS[c]}</span>`).join('');
+  const next = new Map(), keys = new Set(), fresh = [], used = new Set();
+  const cards = found.map(f => {
+    const list = next.get(f.lint) || next.set(f.lint, []).get(f.lint);
+    // skip a card fading out after a fix: identical paragraphs share lints, and it would stay invisible
+    const card = cardsOf.get(f.lint)?.find(c => !used.has(c) && !c.classList.contains('leaving')) || makeCard(f);
+    used.add(card);
+    card.f = f; // the paragraph index may have moved
+    list.push(card);
+    // identity that survives edits elsewhere in the paragraph, so only genuinely new issues animate
+    let k = keyOf(f) + '|' + f.lint.message, n = 0;
+    while (keys.has(k + '|' + n)) n++;
+    keys.add(k += '|' + n);
+    if (!seen.has(k)) fresh.push(card);
+    return card;
+  });
+  cardsOf = next;
+  seen = keys;
+  if (!found.length) {
+    if (!issuesEl.querySelector('.empty')) issuesEl.innerHTML = EMPTY; // don't replay its animation on every recheck
+    return cards;
+  }
+  // touch only what changed instead of rebuilding 1000 cards; kept cards stay in order, so new ones just slot in
+  const keep = new Set(cards);
+  for (const el of [...issuesEl.children]) if (!keep.has(el)) el.remove();
+  let at = issuesEl.firstChild;
+  for (const c of cards) if (c === at) at = at.nextSibling; else issuesEl.insertBefore(c, at);
+  if (fresh.length <= 30) fresh.forEach(c => c.classList.add('enter')); // a whole new document just appears
+  return cards;
+}
+
+function makeCard(f) {
+  const card = document.createElement('div');
+  card.className = 'issue ' + colorOf(f);
+  card.dataset.kind = f.lint.kind;
+  card.tabIndex = 0;
+  card.innerHTML = '<div class="kind"></div><div class="bad"></div><div class="msg"></div><div class="fixes"></div>';
+  card.querySelector('.kind').textContent = f.lint.pretty;
+  card.querySelector('.bad').textContent = f.bad;
+  card.querySelector('.msg').textContent = f.lint.message;
+  card.onclick = () => withRange(card.f, r => r.select());
+  card.onkeydown = e => { if (e.target === card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); card.onclick(); } };
+  card.onanimationend = e => { if (e.animationName === 'enter') card.classList.remove('enter'); }; // moving the card must not replay it
+  const fixes = card.querySelector('.fixes'), acts = document.createElement('span');
+  acts.className = 'actions'; // keeps the secondary buttons together when the row wraps
+  for (const s of f.lint.fixes) {
+    const b = document.createElement('button');
+    b.textContent = s.kind === 1 ? 'Remove' : (s.kind === 2 ? `Insert “${s.rep}”` : s.rep || '(empty)');
+    b.onclick = e => { e.stopPropagation(); leave(card); applyFix(card.f, s); };
+    fixes.append(b);
+  }
+  if (f.lint.kind === 'Spelling') {
+    const add = document.createElement('button');
+    add.className = 'ignore';
+    add.textContent = 'Add to dictionary';
+    add.onclick = e => { e.stopPropagation(); leave(card); addWord(card.f.bad); };
+    acts.append(add);
+  }
+  const ig = document.createElement('button');
+  ig.className = 'ignore';
+  ig.textContent = 'Ignore';
+  ig.onclick = e => {
+    e.stopPropagation();
+    leave(card);
+    ignored.add(keyOf(card.f));
+    try { localStorage.setItem('ignored', JSON.stringify([...ignored])); } catch {}
+    check(true).catch(() => {});
+  };
+  acts.append(ig);
+  fixes.append(acts);
+  return card;
+}
+
+// Dictionary changes run one at a time, so a quick add/remove can't interleave and re-add a removed word.
+let dictQueue = Promise.resolve();
+const dictOp = fn => (dictQueue = dictQueue.then(fn, fn));
+
+const addWord = word => dictOp(async () => {
+  const res = await fetch('dictionary', { method: 'POST', headers: { 'X-Harper': '1' }, body: word }).catch(() => null);
+  if (!res?.ok) { statusEl.textContent = `Couldn't add “${word}”`; return; }
+  await linter.importWords([word]);
+  relint();
+});
+
+// Finds the exact Word range of an issue; null if the paragraph changed or Word search can't match it.
+async function findRange(ctx, f) {
+  const paras = ctx.document.body.paragraphs;
+  paras.load('items/text');
+  await ctx.sync();
+  const para = paras.items[f.p];
+  if (!para || para.text !== f.text) return { stale: true };
+  if (!f.bad || f.bad.length > 255) return { para };
+  let n = 0;
+  for (let i = f.text.indexOf(f.bad); i !== -1 && i < f.start; i = f.text.indexOf(f.bad, i + f.bad.length)) n++;
+  try {
+    const hits = para.search(f.bad, { matchCase: true });
+    hits.load('items');
+    await ctx.sync();
+    return { para, range: hits.items[n] };
+  } catch { return { para }; }
+}
+
+async function withRange(f, fn) {
+  await Word.run(async ctx => {
+    const { stale, range } = await findRange(ctx, f);
+    if (stale) return check(true);
+    if (range) { fn(range); await ctx.sync(); }
+  });
+}
+
+async function applyFix(f, s) {
+  await Word.run(async ctx => {
+    const { stale, para, range } = await findRange(ctx, f);
+    if (stale) return;
+    const { rep, kind } = s, t = f.text;
+    if (range) {
+      if (kind === 1) range.delete();
+      else range.insertText(rep, kind === 2 ? 'End' : 'Replace');
+    } else {
+      // fallback for text Word search can't find: rewrites this one paragraph, which drops its inline formatting
+      para.insertText(kind === 2 ? t.slice(0, f.end) + rep + t.slice(f.end) : t.slice(0, f.start) + (kind === 1 ? '' : rep) + t.slice(f.end), 'Replace');
+    }
+    await ctx.sync();
+  });
+  await check(true);
+}
+
+// ---- Settings: issue filter, rule toggles, personal dictionary, restore ignored ----
+let filterSig = '';
+
+// Cached results came from the old dictionary/rules, so everything is linted again.
+function relint() { cache = new Map(); check(true); }
+
+// Filters with one CSS rule instead of touching every card, so it stays instant with 1000 issues.
+function updateFilter(found) {
+  const counts = new Map();
+  for (const f of found) (counts.get(f.lint.kind) || counts.set(f.lint.kind, [f.lint.pretty, 0]).get(f.lint.kind))[1]++;
+  const sel = $('filter'), cur = counts.has(sel.value) ? sel.value : '';
+  const sig = found.length + '|' + [...counts].map(([k, [, n]]) => k + n).join();
+  if (sig !== filterSig) { // rebuilding the options would close the dropdown while the user has it open
+    filterSig = sig;
+    sel.replaceChildren(new Option(`All issues (${found.length})`, ''),
+      ...[...counts].sort().map(([k, [pretty, n]]) => new Option(`${pretty} (${n})`, k)));
+  }
+  sel.value = cur;
+  applyFilter();
+}
+function applyFilter() {
+  const k = $('filter').value;
+  $('filterCss').textContent = k ? `.issue:not([data-kind="${CSS.escape(k)}"]){display:none}` : '';
+}
+
+async function applyRules(lt = linter) {
+  if (!Object.keys(rules).length) return;
+  // only rules this Harper version knows; others were saved by an older/newer bundle
+  const def = await lt.getDefaultLintConfig();
+  await lt.setLintConfig(Object.fromEntries(Object.entries(def).map(([k, v]) => [k, rules[k] ?? v])));
+}
+
+async function setRule(name, on) {
+  rules[name] = on;
+  try { localStorage.setItem('rules', JSON.stringify(rules)); } catch {}
+  await applyRules();
+  relint();
+}
+
+async function showSettings() {
+  const box = $('settings');
+  box.hidden = !box.hidden;
+  issuesEl.hidden = !box.hidden;
+  $('settingsBtn').setAttribute('aria-expanded', !box.hidden);
+  if (box.hidden) return;
+  $('clearIgnored').textContent = `Restore ignored issues (${ignored.size})`;
+  $('clearIgnored').disabled = !ignored.size;
+  showWords();
+  const [cfg, def, desc, tree] = await Promise.all([linter.getLintConfig(), linter.getDefaultLintConfig(),
+    linter.getLintDescriptions(), linter.getStructuredLintConfig()]);
+  // ~900 rules: group them by Harper's own top-level groups
+  const groupOf = {};
+  const walk = (c, g) => c.settings.forEach(s => s.Group ? walk(s.Group.child, g ?? s.Group.label)
+    : (s.Bool ? [s.Bool.name] : s.OneOfMany?.names || []).forEach(n => groupOf[n] = g));
+  walk(tree);
+  const groups = new Map();
+  for (const name of Object.keys(cfg).sort()) {
+    const g = groupOf[name] || 'Other';
+    const label = document.createElement('label'), cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!(cfg[name] ?? def[name]);
+    cb.onchange = () => setRule(name, cb.checked);
+    label.title = desc[name] || '';
+    label.append(cb, ' ' + name.replace(/(?<=[a-z0-9])(?=[A-Z])/g, ' '));
+    (groups.get(g) || groups.set(g, []).get(g)).push(label);
+  }
+  $('rules').replaceChildren(...[...groups].sort().map(([g, labels]) => {
+    const d = document.createElement('details'), s = document.createElement('summary');
+    s.textContent = `${g} (${labels.length})`;
+    d.append(s, ...labels);
+    return d;
+  }));
+  filterRules();
+}
+
+function filterRules() {
+  const q = $('ruleSearch').value.trim().toLowerCase();
+  for (const d of $('rules').children) {
+    const labels = [...d.querySelectorAll('label')];
+    labels.forEach(l => l.hidden = !!q && !(l.textContent + ' ' + l.title).toLowerCase().includes(q));
+    const any = labels.some(l => !l.hidden);
+    d.hidden = !any;
+    d.open = !!q && any;
+  }
+}
+
+// Returns the saved words, or null if the server couldn't be reached.
+async function showWords() {
+  let words;
+  try {
+    const res = await fetch('dictionary', { cache: 'no-store' });
+    if (!res.ok) throw 0;
+    words = (await res.text()).split(/\r?\n/).filter(Boolean);
+  } catch { $('words').textContent = 'Couldn’t load your dictionary. Is Start Harper running?'; return null; }
+  $('words').replaceChildren(...words.map(w => {
+    const b = document.createElement('button');
+    b.textContent = w + ' ×';
+    b.title = `Remove “${w}” from your dictionary`;
+    b.onclick = () => removeWord(w);
+    return b;
+  }));
+  if (!words.length) $('words').textContent = 'No words yet. Use “Add to dictionary” on a spelling issue.';
+  return words;
+}
+
+const removeWord = word => dictOp(async () => {
+  const res = await fetch('dictionary', { method: 'DELETE', headers: { 'X-Harper': '1' }, body: word }).catch(() => null);
+  if (!res?.ok) { statusEl.textContent = `Couldn't remove “${word}”`; return; }
+  const words = await showWords();
+  if (!words) return; // keep the linter's words rather than wiping them all
+  await linter.clearWords(); // Harper can't drop one word, so reload the remaining list
+  await linter.importWords(words);
+  relint();
+});
+
+$('filter').onchange = applyFilter;
+$('settingsBtn').onclick = showSettings;
+$('ruleSearch').oninput = filterRules;
+$('resetRules').onclick = async () => {
+  rules = {};
+  try { localStorage.removeItem('rules'); } catch {}
+  await linter.setLintConfig(await linter.getDefaultLintConfig());
+  $('settings').hidden = true; showSettings();
+  relint();
+};
+$('clearIgnored').onclick = () => {
+  ignored.clear();
+  try { localStorage.removeItem('ignored'); } catch {}
+  $('clearIgnored').textContent = 'Restore ignored issues (0)';
+  $('clearIgnored').disabled = true;
+  relint();
+};
+
+$('dialect').addEventListener('change', makeLinter);
+// also redraws underlines Word dropped; a flag, because a check already running would overwrite `marked`
+$('recheck').onclick = () => { redrawAll = true; check(true).catch(() => {}); };
+try { $('dialect').value = localStorage.getItem('dialect') || 'American'; } catch {}
+
+Office.onReady(async () => {
+  try {
+    if (canMark()) await Word.run(async ctx => { ctx.document.onAnnotationClicked.add(onMarkClicked); await ctx.sync(); });
+  } catch {} // underlines still work without click-to-card
+  try { await watch(); } catch {} // no paragraph events: keep polling fast
+  await makeLinter();
+  poll();
+});
+</script>
+</body>
+</html>

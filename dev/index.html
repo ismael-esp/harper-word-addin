@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fake Word</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; height:100vh; display:flex; flex-direction:column; font:14px/1.5 "Segoe UI", system-ui, sans-serif; background:#e9eaee; color:#1d2330; }
+  header { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 12px; background:#2b579a; color:#fff; }
+  header b { margin-right:8px; }
+  header button { font:inherit; border:0; border-radius:4px; padding:3px 10px; cursor:pointer; }
+  #stats { margin-left:auto; font:12px/1.4 Consolas, monospace; }
+  main { flex:1; display:flex; min-height:0; }
+  #page-wrap { flex:1; overflow:auto; padding:24px; }
+  #page { max-width:760px; margin:0 auto; background:#fff; padding:56px 64px; box-shadow:0 1px 4px rgba(0,0,0,.2); font:16px/1.7 "Times New Roman", serif; }
+  #page p { margin:0 0 12px; min-height:1.7em; outline:none; white-space:pre-wrap; }
+  #page p:focus { background:#f7f9ff; }
+  iframe { width:360px; border:0; border-left:1px solid #c8c8c8; background:#fff; }
+  ::highlight(Red) { text-decoration: wavy underline #dc2626; text-decoration-thickness:1.5px; }
+  ::highlight(Blue) { text-decoration: wavy underline #2563eb; text-decoration-thickness:1.5px; }
+  ::highlight(Lavender) { text-decoration: wavy underline #8b5cf6; text-decoration-thickness:1.5px; }
+  ::highlight(Green) { text-decoration: wavy underline #16a34a; text-decoration-thickness:1.5px; }
+  ::highlight(Berry) { text-decoration: wavy underline #be185d; text-decoration-thickness:1.5px; }
+</style>
+</head>
+<body>
+<header>
+  <b>Fake Word</b>
+  <button id="reset">Reset sample</button>
+  <button id="big">Big document (×40)</button>
+  <button id="reload">Reload panel</button>
+  <span id="stats"></span>
+</header>
+<main>
+  <div id="page-wrap"><div id="page"></div></div>
+  <iframe id="pane" title="Add-in panel"></iframe>
+</main>
+<script>
+// Sample with deliberate mistakes; the names and acronyms are there on purpose (spelling false positives).
+const SAMPLE = [
+  'Temporal Multi-Agent Distillation for Bimanual Robots',
+  'Sunghyun Park, Ismael Espinoza and Kangsan Lee, Kyung Hee University, Yongin, South Korea',
+  '',
+  'Me and my team has been working on the new project for alot of weeks now. Their was a lot of problems at the begining, but we should of asked for help sooner.',
+  'Its a importent lesson for everyone. Yesterday I recieve a email from the manager who\'s ideas was very usefull, and she said we needs to finish it untill friday.',
+  'Lets do our best and make sure the the report is definately ready on time 😀 . The TMAD policy acheived 86% success in a a simulation.',
+  'This paper presents a method which distills the vision-free teacher policy (of a teacher) into the vision-based student policy, it is deployed via a zero-shot transfer to a physical dual-arm robot.',
+];
+
+const fakeDoc = window.fakeDoc = {
+  paragraphs: [],
+  marks: [], // { id, p, start, length, colorScheme }
+  nextId: 1,
+  onAnnotationClicked: null,
+  stats: { run: 0, sync: 0, search: 0, getAnnotations: 0, insertAnnotations: 0 },
+  marksOf(p) { return this.marks.filter(m => m.p === p); },
+  addMark(p, c) { const id = 'ann' + this.nextId++; this.marks.push({ id, p, start: c.start, length: c.length, colorScheme: c.colorScheme || 'Red' }); scheduleHighlights(); return id; },
+  removeMark(id) { this.marks = this.marks.filter(m => m.id !== id); scheduleHighlights(); },
+  edit(p, s, e, t) {
+    const old = this.paragraphs[p];
+    this.paragraphs[p] = old.slice(0, s) + t + old.slice(e);
+    const delta = t.length - (e - s);
+    // like Word: marks overlapping the edit go away, later ones shift
+    this.marks = this.marks.flatMap(m => m.p !== p || m.start + m.length <= s ? [m]
+      : m.start >= e ? [{ ...m, start: m.start + delta }] : []);
+    renderParagraph(p);
+  },
+  select(p, s, e) {
+    const el = page.children[p], node = el.firstChild;
+    if (!node) return;
+    const r = document.createRange();
+    r.setStart(node, s); r.setEnd(node, e);
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  },
+};
+
+const page = document.getElementById('page');
+
+function load(paragraphs) {
+  fakeDoc.paragraphs = paragraphs.slice();
+  fakeDoc.marks = [];
+  page.replaceChildren(...paragraphs.map((_, p) => {
+    const el = document.createElement('p');
+    el.contentEditable = 'true';
+    el.spellcheck = false;
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); }); // one <p> per Word paragraph
+    el.addEventListener('input', () => {
+      fakeDoc.paragraphs[p] = el.textContent;
+      fakeDoc.marks = fakeDoc.marks.filter(m => m.p !== p); // typing invalidates this paragraph's marks
+      scheduleHighlights();
+    });
+    el.addEventListener('click', () => {
+      const sel = getSelection();
+      if (!sel.rangeCount || !sel.isCollapsed) return;
+      const off = sel.anchorOffset;
+      const m = fakeDoc.marksOf(p).find(m => off >= m.start && off <= m.start + m.length);
+      if (m && fakeDoc.onAnnotationClicked) fakeDoc.onAnnotationClicked({ id: m.id });
+    });
+    return el;
+  }));
+  paragraphs.forEach((_, p) => renderParagraph(p));
+}
+
+function renderParagraph(p) {
+  page.children[p].textContent = fakeDoc.paragraphs[p];
+  scheduleHighlights();
+}
+
+let hlQueued = false;
+function scheduleHighlights() {
+  if (hlQueued) return;
+  hlQueued = true;
+  requestAnimationFrame(() => {
+    hlQueued = false;
+    const byColor = {};
+    for (const m of fakeDoc.marks) {
+      const node = page.children[m.p]?.firstChild;
+      if (!node || m.start + m.length > node.length) continue;
+      const r = new StaticRange({ startContainer: node, startOffset: m.start, endContainer: node, endOffset: m.start + m.length });
+      (byColor[m.colorScheme] ||= []).push(r);
+    }
+    CSS.highlights.clear();
+    for (const [c, rs] of Object.entries(byColor)) CSS.highlights.set(c, new Highlight(...rs));
+  });
+}
+
+setInterval(() => {
+  const s = fakeDoc.stats, mem = performance.memory ? ` | heap ${(performance.memory.usedJSHeapSize / 1048576).toFixed(0)} MB` : '';
+  document.getElementById('stats').textContent =
+    `Word.run ${s.run} | sync ${s.sync} | search ${s.search} | getAnn ${s.getAnnotations} | insertAnn ${s.insertAnnotations} | marks ${fakeDoc.marks.length}${mem}`;
+}, 500);
+
+document.getElementById('reset').onclick = () => load(SAMPLE);
+document.getElementById('big').onclick = () => load(Array.from({ length: 40 }, () => SAMPLE).flat());
+document.getElementById('reload').onclick = () => { fakeDoc.onAnnotationClicked = null; document.getElementById('pane').contentWindow.location.reload(); };
+load(SAMPLE);
+document.getElementById('pane').src = 'taskpane.html'; // after fakeDoc exists, since fake-word.js reads it on load
+</script>
+</body>
+</html>

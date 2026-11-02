@@ -1,0 +1,6 @@
+# personal dictionary: your own words, created when you first use "Add to dictionary"
+word-addin/dictionary.txt
+
+# build output and dependencies
+node_modules/
+*.zip
