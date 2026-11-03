@@ -46,7 +46,7 @@ The first load takes a few seconds.
 1. Double-click **`Start Harper.cmd`** (keep its window open).
 2. In Word, click **Check Grammar** on the Home tab.
 
-**Start it automatically with Windows (optional):** press `Win + R`, type `shell:startup`, press Enter. Right-click `Start Harper.cmd` → **Show more options → Create shortcut**, and move the shortcut into the folder that opened.
+**Start it automatically with Windows, with no window (optional):** double-click **`Install Autostart.cmd`** once. Harper then runs hidden in the background every time you log in, so you never need `Start Harper.cmd`. To stop it, end `node.exe` in Task Manager; to undo the auto-start, run `Uninstall.cmd`.
 
 ## Using the panel
 
